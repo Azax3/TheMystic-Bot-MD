@@ -1621,43 +1621,79 @@ export async function participantsUpdate({ id, participants, action }) {
   const _translate = JSON.parse(fs.readFileSync(`./language/${idioma}.json`))
   const tradutor = _translate.handler.participantsUpdate
 
-  const m = mconn
+  const fetch = require('node-fetch');
+const fs = require('fs');
+
+const fakecontact = { 
+  'key': { 
+    'participants': '0@s.whatsapp.net', 
+    'remoteJid': 'status@broadcast', 
+    'fromMe': false, 
+    'id': 'Halo' 
+  }, 
+  'message': { 
+    'contactMessage': { 
+      'vcard': `BEGIN:VCARD\nVERSION:3.0\nN:Sy;Bot;;;\nFN:y\nitem1.TEL;waid=0000000000:0000000000\nitem1.X-ABLabel:Ponsel\nEND:VCARD` 
+    } 
+  }, 
+  'participant': '0@s.whatsapp.net' 
+};
+
+const handler = async (m, { conn, opts }) => {
   if (opts['self']) return;
-  //if (m.conn.isInit) return;
   if (global.db.data == null) await loadDatabase();
-  const chat = global.db.data.chats[id] || {};
-  const botTt = global.db.data.settings[m.conn.user.jid] || {};
+  const chat = global.db.data.chats[m.chat] || {};
+  const botTt = global.db.data.settings[conn.user.jid] || {};
   let text = '';
+
   switch (action) {
     case 'add':
     case 'remove':
       if (chat.welcome && !chat?.isBanned) {
-        const groupMetadata = await m.conn.groupMetadata(id) || (conn.chats[id] || {}).metadata;
+        const groupMetadata = await conn.groupMetadata(m.chat) || (conn.chats[m.chat] || {}).metadata;
         for (const user of participants) {
           let pp = 'https://raw.githubusercontent.com/BrunoSobrino/TheMystic-Bot-MD/master/src/avatar_contact.png';
           try {
-            pp = await m.conn.profilePictureUrl(user, 'image');
-          } catch (e) {
-          } finally {
-            const apii = await m.conn.getFile(pp);
-            const antiArab = JSON.parse(fs.readFileSync('./src/antiArab.json'));
-            const userPrefix = antiArab.some((prefix) => user.startsWith(prefix));
-            const botTt2 = groupMetadata.participants.find((u) => m.conn.decodeJid(u.id) == m.conn.user.jid) || {};
-            const isBotAdminNn = botTt2?.admin === 'admin' || false;
-            text = (action === 'add' ? (chat.sWelcome || tradutor.texto1 || conn.welcome || 'Welcome, @user!').replace('@subject', await m.conn.getName(id)).replace('@desc', groupMetadata.desc?.toString() || '*𝚂𝙸𝙽 𝙳𝙴𝚂𝙲𝚁𝙸𝙿𝙲𝙸𝙾𝙽*') :
-              (chat.sBye || tradutor.texto2 || conn.bye || 'Bye, @user!')).replace('@user', '@' + user.split('@')[0]);
-            if (userPrefix && chat.antiArab && botTt.restrict && isBotAdminNn && action === 'add') {
-              const responseb = await m.conn.groupParticipantsUpdate(id, [user], 'remove');
-              if (responseb[0].status === '404') return;
-              const fkontak2 = { 'key': { 'participants': '0@s.whatsapp.net', 'remoteJid': 'status@broadcast', 'fromMe': false, 'id': 'Halo' }, 'message': { 'contactMessage': { 'vcard': `BEGIN:VCARD\nVERSION:3.0\nN:Sy;Bot;;;\nFN:y\nitem1.TEL;waid=${user.split('@')[0]}:${user.split('@')[0]}\nitem1.X-ABLabel:Ponsel\nEND:VCARD` } }, 'participant': '0@s.whatsapp.net' };
-              await m.conn.sendMessage(id, { text: `*[❗] @${user.split('@')[0]} ᴇɴ ᴇsᴛᴇ ɢʀᴜᴘᴏ ɴᴏ sᴇ ᴘᴇʀᴍɪᴛᴇɴ ɴᴜᴍᴇʀᴏs ᴀʀᴀʙᴇs ᴏ ʀᴀʀᴏs, ᴘᴏʀ ʟᴏ ϙᴜᴇ sᴇ ᴛᴇ sᴀᴄᴀʀᴀ ᴅᴇʟ ɢʀᴜᴘᴏ*`, mentions: [user] }, { quoted: fkontak2 });
-              return;
-            }
-            await m.conn.sendFile(id, apii.data, 'pp.jpg', text, null, false, { mentions: [user] });
+            pp = await conn.profilePictureUrl(user, 'image');
+          } catch (e) {}
+
+          const audioUrl = 'https://file.io/8UaJJwYxlD1J'; // رابط الصوتيات
+          const thumbnailUrl = pp; // استخدام صورة الملف الشخصي للصورة المصغرة
+
+          try {
+            const thumbnailBuffer = await (await fetch(thumbnailUrl)).buffer();
+
+            text = (action === 'add' ? (chat.sWelcome || 'Welcome, @user!').replace('@subject', await conn.getName(m.chat)).replace('@desc', groupMetadata.desc?.toString() || '*𝚂𝙸𝙽 𝙳𝙴𝚂𝙲𝚁𝙸𝙿𝙲𝙸𝙾𝙽*') :
+              (chat.sBye || 'Bye, @user!')).replace('@user', '@' + user.split('@')[0]);
+
+            await conn.sendPresenceUpdate('recording', m.chat);
+            await conn.sendMessage(m.chat, {
+              audio: { url: audioUrl },
+              ptt: true,
+              mimetype: 'audio/mpeg',
+              fileName: 'welcome_or_goodbye.mp3',
+              contextInfo: {
+                forwardingScore: 256,
+                isForwarded: true,
+                externalAdReply: {
+                  title: 'Audio Title',
+                  body: text,
+                  sourceUrl: audioUrl,
+                  thumbnail: thumbnailBuffer,
+                },
+              }
+            }, { quoted: fakecontact });
+
+          } catch (error) {
+            console.error(error);
+            await conn.reply(m.chat, 'حدث خطأ أثناء جلب المقطع الصوتي وإرساله.', m);
           }
         }
       }
       break;
+  }
+};
+
     case 'promote':
     case 'daradmin':
     case 'darpoder':
